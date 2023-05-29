@@ -64,7 +64,7 @@ def batched_freq_2_logit(
     cos_b: Float[t.Tensor, "batch freqs"],
     freqs: Float[t.Tensor, "freqs"],
     p: int,
-) -> Float[t.Tensor, "batch p"]:
+):
     sin_sum = sin_a * cos_b + cos_a * sin_b  # batch, freqs
     cos_sum = cos_a * cos_b - sin_a * sin_b  # batch, freqs
 

@@ -12,50 +12,7 @@ N_FREQ = 64
 
 device = 'cpu'
 
-# %%
-# Implementation of (a + b) % p according to section 3.1 of https://arxiv.org/pdf/2301.05217.pdf
-def freq_2_logit(
-    sin_a: t.Tensor, 
-    cos_a: t.Tensor, 
-    sin_b: t.Tensor, 
-    cos_b: t.Tensor,
-    freqs: t.Tensor, 
-    p: int,
-):
-    sin_sum = sin_a * cos_b + cos_a * sin_b
-    cos_sum = cos_a * cos_b - sin_a * sin_b
-
-    c = t.arange(p, dtype=float)
-    sin_c = t.sin(c)
-    cos_c = t.cos(c)
-
-    x = c.unsqueeze(0)
-    freqs = freqs.unsqueeze(0)
-    cos_c = t.cos(x.T @ freqs)
-    sin_c = t.sin(x.T @ freqs)
-
-    cos_a_plus_b_minus_c = cos_sum * cos_c + sin_sum * sin_c
-
-    return cos_a_plus_b_minus_c.sum(dim=-1)
-                                             
-def sum_mod_p(a: int, b: int, p: int, size: int = 64) -> int:
-    """Returns (a + b) % p using freq_2_logit"""
-    freqs = (2  * t.pi / p) * t.randint(1, 10 ** 5, (size,))
-    freqs = freqs.to(float)
-    
-    sin_a = t.sin(a * freqs)
-    cos_a = t.cos(a * freqs)
-
-    sin_b = t.sin(b * freqs)
-    cos_b = t.cos(b * freqs)
-
-    logits = freq_2_logit(sin_a, cos_a, sin_b, cos_b, freqs, p)
-    return logits.argmax()
- 
-# if MAIN:
-#    for a, b, p in t.randint(1, 1000, (100, 3)):
-#         a, b, p = int(a), int(b), int(p)
-#         assert sum_mod_p(a, b, p, size=15).item() == (a + b) % p, f"NOPE: {a} {b} {p}"
+from freq_2_logit import batched_freq_2_logit
 
 # %%
 class SingleLayer(nn.Module):
@@ -64,29 +21,44 @@ class SingleLayer(nn.Module):
         self.p = p
         self.n_freqs = n_freqs
 
-        freqs = (2  * t.pi / p) * t.randint(1, 10 ** 5, (n_freqs,))
-        self.freqs = freqs.to(float)
+        self.freqs = nn.Linear(1, n_freqs).double()
+        # self.freqs = (2  * t.pi / p) * t.randint(1, 10 ** 5, (64,)).to(float)
 
-        self.sin = nn.Linear(n_freqs, n_freqs, bias=False).double()
-        self.cos = nn.Linear(n_freqs, n_freqs, bias=False).double()
+        # freqs = (2  * t.pi / p) * t.randint(1, 10 ** 5, (n_freqs,))
+        # self.freqs = freqs.to(float)
+
+        # self.sin = nn.Linear(n_freqs, n_freqs, bias=False).double()
+        # self.cos = nn.Linear(n_freqs, n_freqs, bias=False).double()
 
     def forward(self, x):
-        print(x.device)
         a = x[:, 0]
         b = x[:, 1]
 
-        print(x.shape)
-        print(a.shape)
-        print(b.shape)
-        sin_a = self.sin(a * self.freqs)
-        cos_a = self.cos(a * self.freqs)
+        sin_a = t.sin(self.freqs(a.unsqueeze(0).T))
+        cos_a = t.cos(a.unsqueeze(0).T * self.freqs)
+        sin_b = t.sin(b.unsqueeze(0).T * self.freqs)
+        cos_b = t.cos(b.unsqueeze(0).T * self.freqs)
 
-        sin_b = self.sin(b * self.freqs)
-        cos_b = self.cos(b * self.freqs)
-        
-        print(sin_a.shape)
 
-        return freq_2_logit(sin_a, cos_a, sin_b, cos_b, self.freqs, self.p)
+        logits = batched_freq_2_logit(sin_a, cos_a, sin_b, cos_b, self.freqs, p)
+        return logits
+
+if MAIN:
+    p = 113
+    a = t.randint(1, p, (100,))
+    b = t.randint(1, p, (100,))
+
+    mod = (a + b) % p
+
+    model = SingleLayer(p)
+    
+    ab = t.stack((a, b), dim=1)
+    logits = model.forward(ab)
+    out = logits.argmax(-1)
+    
+    print(out, model)
+
+    t.testing.assert_close(out, mod)
 
 # %%
 import pytorch_lightning as pl

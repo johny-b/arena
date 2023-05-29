@@ -2,77 +2,34 @@
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
-import torch as t
-from torch import nn
-import random
-
-MAIN = '__main__'
-N_FREQ = 64
-
 device = 'cpu'
 
-from freq_2_logit import batched_freq_2_logit
+import pandas as pd
+import torch as t
 
-# %%
-class SingleLayer(nn.Module):
-    def __init__(self, p, n_freqs=50):
-        super().__init__()
-        self.p = p
-        self.n_freqs = n_freqs
-
-        self.freqs = nn.Linear(1, n_freqs).double()
-        # self.freqs = (2  * t.pi / p) * t.randint(1, 10 ** 5, (64,)).to(float)
-
-        # freqs = (2  * t.pi / p) * t.randint(1, 10 ** 5, (n_freqs,))
-        # self.freqs = freqs.to(float)
-
-        # self.sin = nn.Linear(n_freqs, n_freqs, bias=False).double()
-        # self.cos = nn.Linear(n_freqs, n_freqs, bias=False).double()
-
-    def forward(self, x):
-        a = x[:, 0]
-        b = x[:, 1]
-
-        sin_a = t.sin(self.freqs(a.unsqueeze(0).T))
-        cos_a = t.cos(a.unsqueeze(0).T * self.freqs)
-        sin_b = t.sin(b.unsqueeze(0).T * self.freqs)
-        cos_b = t.cos(b.unsqueeze(0).T * self.freqs)
-
-
-        logits = batched_freq_2_logit(sin_a, cos_a, sin_b, cos_b, self.freqs, p)
-        return logits
-
-if MAIN:
-    p = 113
-    a = t.randint(1, p, (100,))
-    b = t.randint(1, p, (100,))
-
-    mod = (a + b) % p
-
-    model = SingleLayer(p)
-    
-    ab = t.stack((a, b), dim=1)
-    logits = model.forward(ab)
-    out = logits.argmax(-1)
-    
-    print(out, model)
-
-    t.testing.assert_close(out, mod)
-
-# %%
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import CSVLogger
+
+import sys
+sys.path.append('/home/janbet/ARENA_2.0/chapter0_fundamentals/exercises')
+
+from plotly_utils import line
+
+MAIN = __name__ == '__main__' 
+
+from models import FreqsParam
+
+from IPython import get_ipython
+ipython = get_ipython()
+ipython.run_line_magic("load_ext", "autoreload")
+ipython.run_line_magic("autoreload", "2")
 
 # %%
 
 class ModDataset(t.utils.data.Dataset):
-    """Face Landmarks dataset."""
-
     def __init__(self, p: int, nth: int):
         self.p = p
         self.nth = nth
-
         self.data = self.get_data()
 
     def __len__(self):
@@ -91,8 +48,6 @@ class ModDataset(t.utils.data.Dataset):
     
         return [x for i, x in enumerate(all_data) if not i % self.nth]
 
-# %%
-
 def get_datasets(p):
     trainset = ModDataset(p, 7)
     testset = ModDataset(p, 3)
@@ -100,14 +55,13 @@ def get_datasets(p):
     return trainset, testset
 
 # %%
-class LitSingleLayer(pl.LightningModule):
-    def __init__(self, p: int, batch_size: int, max_epochs: int):
+class LitModel(pl.LightningModule):
+    def __init__(self, model, batch_size: int, max_epochs: int):
         super().__init__()
-        self.p = p
-        self.model = SingleLayer(p)
+        self.model = model
         self.batch_size = batch_size
         self.max_epochs = max_epochs
-        self.trainset, self.testset = get_datasets(p)
+        self.trainset, self.testset = get_datasets(model.p)
 
     def forward(self, x: t.Tensor) -> t.Tensor:
         return self.model(x)
@@ -117,8 +71,6 @@ class LitSingleLayer(pl.LightningModule):
         in_ = in_.to(device)
         labels = labels.to(device)
         logits = self(in_)
-        print(len(logits))
-        print(len(labels))
         loss = t.nn.functional.cross_entropy(logits, labels)
         self.log("train_loss", loss)
         return loss
@@ -136,14 +88,13 @@ class LitSingleLayer(pl.LightningModule):
         return t.utils.data.DataLoader(self.trainset, batch_size=self.batch_size, shuffle=True)
 
 # %%
-
-# Create the model & training system
-
 if MAIN:
     p = 113
     batch_size = 64
     max_epochs = 3
-    model = LitSingleLayer(p, batch_size, max_epochs).to(device)
+    n_freqs=64
+
+    model = LitModel(FreqsParam(p, n_freqs=10), batch_size, max_epochs).to(device)
     assert str(model.device) == device, f"model has device {model.device}"
     
     # Get a logger, to record metrics during training
@@ -156,21 +107,14 @@ if MAIN:
         log_every_n_steps=1,
     )
     trainer.fit(model=model)
+    print(sorted(model.model.freqs.tolist()))
 
 # %%
-import pandas as pd
 
 if MAIN:
-    metrics = pd.read_csv(f"{trainer.logger.log_dir}/metrics.csv")
-    
+    metrics = pd.read_csv(f"{trainer.logger.log_dir}/metrics.csv")    
     metrics.head()
-
-# %%
-
-
-if MAIN:
-    print(metrics["train_loss"].values)
-    from plotly_utils import line
+    print()
     line(
         metrics["train_loss"].values,
         x=metrics["step"].values,

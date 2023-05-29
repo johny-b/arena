@@ -1,10 +1,7 @@
 # %%
 import torch as t
 
-from jaxtyping import Float, Int, jaxtyped
-import typeguard
-
-MAIN = '__main__'
+MAIN = __name__ == '__main__'
 # %%
 # Implementation of (a + b) % p according to section 3.1 of https://arxiv.org/pdf/2301.05217.pdf
 def freq_2_logit(
@@ -50,19 +47,16 @@ def sum_mod_p(a: int, b: int, p: int, size: int = 64) -> int:
 if MAIN:
    for a, b, p in t.randint(1, 1000, (100, 3)):
         a, b, p = int(a), int(b), int(p)
-        assert sum_mod_p(a, b, p, size=15).item() == (a + b) % p, f"NOPE: {a} {b} {p}"
+        assert sum_mod_p(a, b, p, size=64).item() == (a + b) % p, f"NOPE: {a} {b} {p}"
 
 # %%
 
-
-@jaxtyped
-@typeguard.typechecked
 def batched_freq_2_logit(
-    sin_a: Float[t.Tensor, "batch freqs"],
-    cos_a: Float[t.Tensor, "batch freqs"],
-    sin_b: Float[t.Tensor, "batch freqs"],
-    cos_b: Float[t.Tensor, "batch freqs"],
-    freqs: Float[t.Tensor, "freqs"],
+    sin_a: t.Tensor,
+    cos_a: t.Tensor,
+    sin_b: t.Tensor,
+    cos_b: t.Tensor,
+    freqs: t.Tensor,
     p: int,
 ):
     sin_sum = sin_a * cos_b + cos_a * sin_b  # batch, freqs
@@ -88,14 +82,7 @@ def batched_freq_2_logit(
     return cos_a_plus_b_minus_c.sum(dim=-1)  # batch, p
 
 
-@jaxtyped
-@typeguard.typechecked
-def batched_sum_mod_p(
-    a: Int[t.Tensor, "batch"],
-    b: Int[t.Tensor, "batch"],
-    p: int, 
-    size: int = 64,
-) -> Int[t.Tensor, "batch"]:
+def batched_sum_mod_p(a: t.Tensor, b: t.Tensor, p: int, size: int = 64):
     """Returns (a + b) % p using freq_2_logit"""
     freqs = (2  * t.pi / p) * t.randint(1, 10 ** 5, (size,))
     freqs = freqs.to(float)

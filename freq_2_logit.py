@@ -62,7 +62,7 @@ def batched_freq_2_logit(
     sin_sum = sin_a * cos_b + cos_a * sin_b  # batch, freqs
     cos_sum = cos_a * cos_b - sin_a * sin_b  # batch, freqs
 
-    c = t.arange(p, dtype=float)  # p
+    c = t.arange(p, dtype=float).to(sin_a.device)  # p
     sin_c = t.sin(c)  # p
     cos_c = t.cos(c)  # p
 
@@ -93,7 +93,6 @@ def batched_sum_mod_p(a: t.Tensor, b: t.Tensor, p: int, size: int = 64):
     cos_b = t.cos(b.unsqueeze(0).T * freqs)
 
     logits = batched_freq_2_logit(sin_a, cos_a, sin_b, cos_b, freqs, p)
-    print(logits.shape)
     return logits.argmax(-1)
 
 if MAIN:

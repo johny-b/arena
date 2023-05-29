@@ -1,9 +1,5 @@
 # %%
 
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
-device = 'cpu'
-
 import pandas as pd
 import torch as t
 
@@ -23,6 +19,9 @@ from IPython import get_ipython
 ipython = get_ipython()
 ipython.run_line_magic("load_ext", "autoreload")
 ipython.run_line_magic("autoreload", "2")
+
+
+device = t.device('cuda' if t.cuda.is_available() else 'cpu')
 
 # %%
 
@@ -104,11 +103,13 @@ class LitModel(pl.LightningModule):
 if MAIN:
     p = 113
     batch_size = 64
-    max_epochs = 60
+    max_epochs = 20
     n_freqs=64
 
-    model = LitModel(m.FreqsSinParam(p, n_freqs=10), batch_size, max_epochs).to(device)
-    assert str(model.device) == device, f"model has device {model.device}"
+    x = m.FreqsSinParam(p, n_freqs=n_freqs)
+
+    model = LitModel(x, batch_size, max_epochs).to(device)
+    assert str(model.device).startswith(str(device)), f"model has device {model.device}"
     
     # Get a logger, to record metrics during training
     logger = CSVLogger(save_dir=os.getcwd() + "/logs", name="t1")
@@ -120,7 +121,7 @@ if MAIN:
         log_every_n_steps=1,
     )
     trainer.fit(model=model)
-    print(sorted(model.model.freqs.tolist()))
+    # print(sorted(model.model.freqs.tolist()))
 
 # %%
 

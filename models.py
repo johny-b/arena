@@ -1,8 +1,4 @@
 # %%
-
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
 import torch as t
 from torch import nn
 import random
@@ -11,8 +7,6 @@ import typeguard
 
 MAIN = __name__ == '__main__'
 N_FREQ = 64
-
-device = 'cpu'
 
 from freq_2_logit import batched_freq_2_logit
 

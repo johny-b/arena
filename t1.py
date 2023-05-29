@@ -13,11 +13,11 @@ from pytorch_lightning.loggers import CSVLogger
 import sys
 sys.path.append('/home/janbet/ARENA_2.0/chapter0_fundamentals/exercises')
 
-from plotly_utils import line
+from plotly_utils import line, plot_train_loss_and_test_accuracy_from_metrics
 
 MAIN = __name__ == '__main__' 
 
-from models import FreqsParam
+import models as m
 
 from IPython import get_ipython
 ipython = get_ipython()
@@ -67,13 +67,23 @@ class LitModel(pl.LightningModule):
         return self.model(x)
 
     def training_step(self, batch, batch_idx: int) -> t.Tensor:
+        logits, labels = self._shared_train_val_step(batch)
+        loss = t.nn.functional.cross_entropy(logits, labels)
+        self.log("train_loss", loss)
+        return loss
+
+    def _shared_train_val_step(self, batch):
         in_, labels = batch
         in_ = in_.to(device)
         labels = labels.to(device)
         logits = self(in_)
-        loss = t.nn.functional.cross_entropy(logits, labels)
-        self.log("train_loss", loss)
-        return loss
+        return logits, labels
+    
+    def validation_step(self, batch, batch_idx: int) -> None:
+        logits, labels = self._shared_train_val_step(batch)
+        classifications = logits.argmax(dim=1)
+        accuracy = t.sum(classifications == labels) / len(classifications)
+        self.log("accuracy", accuracy)
 
     def configure_optimizers(self):
         '''
@@ -87,14 +97,17 @@ class LitModel(pl.LightningModule):
         '''
         return t.utils.data.DataLoader(self.trainset, batch_size=self.batch_size, shuffle=True)
 
+    def val_dataloader(self):
+        return t.utils.data.DataLoader(self.testset, batch_size=self.batch_size, shuffle=True)
+
 # %%
 if MAIN:
     p = 113
     batch_size = 64
-    max_epochs = 3
+    max_epochs = 60
     n_freqs=64
 
-    model = LitModel(FreqsParam(p, n_freqs=10), batch_size, max_epochs).to(device)
+    model = LitModel(m.FreqsSinParam(p, n_freqs=10), batch_size, max_epochs).to(device)
     assert str(model.device) == device, f"model has device {model.device}"
     
     # Get a logger, to record metrics during training
@@ -113,17 +126,6 @@ if MAIN:
 
 if MAIN:
     metrics = pd.read_csv(f"{trainer.logger.log_dir}/metrics.csv")    
-    metrics.head()
-    print()
-    line(
-        metrics["train_loss"].values,
-        x=metrics["step"].values,
-        yaxis_range=[0, metrics["train_loss"].max() + 0.1],
-        labels={"x": "Batches seen", "y": "Cross entropy loss"},
-        title="ConvNet training on MNIST",
-        width=800,
-        hovermode="x unified",
-        template="ggplot2", # alternative aesthetic for your plots (-:
-    )
-
+    plot_train_loss_and_test_accuracy_from_metrics(metrics, "Training ConvNet on MNIST data")
+    
 # %%

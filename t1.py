@@ -103,10 +103,10 @@ class LitModel(pl.LightningModule):
 if MAIN:
     p = 113
     batch_size = 64
-    max_epochs = 20
-    n_freqs=64
+    max_epochs = 100
+    n_freqs = 27
 
-    x = m.FreqsSinParam(p, n_freqs=n_freqs)
+    x = m.FreqsSinParam(p, n_freqs=n_freqs, sin_width=96)
 
     model = LitModel(x, batch_size, max_epochs).to(device)
     assert str(model.device).startswith(str(device)), f"model has device {model.device}"
@@ -122,8 +122,6 @@ if MAIN:
     )
     trainer.fit(model=model)
     # print(sorted(model.model.freqs.tolist()))
-
-# %%
 
 if MAIN:
     metrics = pd.read_csv(f"{trainer.logger.log_dir}/metrics.csv")    

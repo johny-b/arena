@@ -4,6 +4,7 @@ import torch as t
 
 from procgen_tools.imports import load_model
 from procgen_tools import maze, visualization
+from procgen_tools.models import human_readable_action
 
 device = t.device("cpu")
 
@@ -35,8 +36,6 @@ state = maze.state_from_venv(venv)
 print(state.inner_grid())
 visualization.visualize_venv(venv, render_padding=False)
 
-
-
 #   Run the model on the maze. Return logist of the 15 actions.
 #   Q: why 15?? I guessed there are 5 (left/right/up/down/no-action)
 #   A: I've no idea ;( I'm gonna dig into this.
@@ -45,7 +44,7 @@ batched_obs = t.tensor(venv.reset(), dtype=t.float32, device=device)
 with t.no_grad():
     categorical, value = policy(batched_obs)
     
-print(categorical.logits)
+print(human_readable_action(categorical.logits.argmax()))
 print(value)
 
 # %%

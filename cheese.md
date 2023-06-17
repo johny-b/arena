@@ -11,15 +11,17 @@ This describes the network(s) we'll be working on. [Training section](#training-
         "Interpretable version" means (I'm not super-sure) "the same architecture, so we can load weights, but written in a little different way so that
         we can use [CircRL - Tools for applying circuits-style interpretability techniques to RL agents](https://github.com/UlisseMini/circrl).
         [ref](https://github.com/ulissemini/procgen-tools#interpretable-parameter-compatible-implementations-of-impala-models)
+4.  https://github.com/UlisseMini/circrl - activation-capturing-tool, used by procgen-tools. Something like TransfrmerLens, but for non-transformers, I guess?
 
-4.  [Google drive with trained models](https://drive.google.com/drive/folders/1Ig7bzRlieyYFcdKL_PM-guSWR8WryDOL). 
+5.  [Google drive with trained models](https://drive.google.com/drive/folders/1Ig7bzRlieyYFcdKL_PM-guSWR8WryDOL). 
     
     * AT et al used `maze_I/*.pth `.
     * Maybe only `maze_I/model_rand_region_5.pth`? I don't recall any part about other model.
+    * `procgen-tools` knows where to get the model from, so we don't really care about this drive I guess
 
-5.  [Cheese algebra colab](https://colab.research.google.com/drive/1fPfehQc1ydnYGSDXZmA22282FcgFpNTJ?usp=sharing)
-6.  [Maze generator colab](https://colab.research.google.com/drive/1zHk6jxjTjQ4yL12Fbp3REpTXsqQGV1dp?usp=sharing) (I'm not sure if this is useful)
-7.  [Channel resampling colab](https://colab.research.google.com/drive/1uAUc91NHdpMiJqjlwh6Lx1_32QNLki5Z?usp=sharing) (I'm not sure if this is useful)
+6.  [Cheese algebra colab](https://colab.research.google.com/drive/1fPfehQc1ydnYGSDXZmA22282FcgFpNTJ?usp=sharing)
+7.  [Maze generator colab](https://colab.research.google.com/drive/1zHk6jxjTjQ4yL12Fbp3REpTXsqQGV1dp?usp=sharing) (same as `copied_generate_maze.py` in repo)
+8.  [Channel resampling colab](https://colab.research.google.com/drive/1uAUc91NHdpMiJqjlwh6Lx1_32QNLki5Z?usp=sharing) (I'm not sure if this is useful)
 
 ## Questions
 

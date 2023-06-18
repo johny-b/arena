@@ -4,6 +4,7 @@ import numpy as np
 import torch as t
 import pickle
 from collections import defaultdict
+import gc
 
 from procgen_tools import maze, imports
 
@@ -16,6 +17,7 @@ for mazes_ix in range(1, 100):
 
     data = defaultdict(list)
     for ix, (seed, grid) in enumerate(grids):
+        print(mazes_ix, ix)
         venv = maze.venv_from_grid(np.array(grid))
         policy, hook = imports.load_model()
 
@@ -26,9 +28,17 @@ for mazes_ix in range(1, 100):
         for layer_name, val in hook.values_by_label.items():
             if any(x in layer_name for x in ("resadd_out", "maxpool_out", "relu3_out", "relufc_out")):
                 data[layer_name].append((seed, layer_name, val))
+        
+        #   Some of this stuff reduces memory leak (although doesn't fix it fully)
+        del policy
+        del hook
+        del venv
+        gc.collect()
     
     for key, val in data.items():
         out_fname = f'/home/janbet/arena/activations/mazes_{mazes_ix}_{key}.pickle'
         with open(out_fname, 'wb') as f:
             pickle.dump(val, f, protocol=pickle.HIGHEST_PROTOCOL)
+            
+    
 # %%

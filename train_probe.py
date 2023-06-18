@@ -1,6 +1,9 @@
 # %%
-import pickle
+
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
+import pickle
 from typing import List
 import json
 import pandas as pd
@@ -13,7 +16,13 @@ from torch import nn
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import CSVLogger
 
-device = t.device("cuda")
+import sys
+sys.path.append('/home/janbet/ARENA_2.0/chapter0_fundamentals/exercises')
+
+from plotly_utils import plot_train_loss_and_test_accuracy_from_metrics   
+
+
+device = t.device("cpu")
 MAIN = __name__ == '__main__'
 # %%
 class ActivationsDataset(Dataset):
@@ -91,8 +100,8 @@ class NextActionProbe(nn.Module):
         super().__init__()
         self.layer_name = layer_name
         self._in_size = self._calc_in_size()
-        self._out_size = 4
-        self.linear = nn.Linear(self._in_size, self._out_size)
+        self._out_size = 5
+        self.linear = nn.Linear(self._in_size, self._out_size).to(t.device("cpu"))
         
     def forward(self, x):
         return self.linear(x.flatten(start_dim=1))
@@ -107,7 +116,7 @@ class NextActionProbe(nn.Module):
 class LitModel(pl.LightningModule):
     def __init__(self, model, batch_size: int, max_epochs: int, trainset: ActivationsDataset, valset: ActivationsDataset):
         super().__init__()
-        self.model = model
+        self.model = model.to(device)
         self.batch_size = batch_size
         self.max_epochs = max_epochs
         self.trainset = trainset
@@ -146,37 +155,46 @@ class LitModel(pl.LightningModule):
 
 # %%
 if MAIN:# %%
-    LAYER_NAME = "embedder.block2.res2.resadd_out"
-    TRAIN_FILES = [1,2,3,4,5]
-    VAL_FILES = [6]
-
+    TRAIN_FILES = [1,2,3,4,5,6]
+    VAL_FILES = [7]
+      
     batch_size = 32
-    max_epochs = 10
-    train_dataset = ActivationsDataset(layer_name=LAYER_NAME, file_ids=TRAIN_FILES)
-    test_dataset = ActivationsDataset(layer_name=LAYER_NAME, file_ids=VAL_FILES)
-    
-    probe = NextActionProbe(LAYER_NAME)
-    model = LitModel(probe, batch_size, max_epochs, train_dataset, test_dataset).to(device)
-    assert str(model.device).startswith(str(device)), f"model has device {model.device}"
-    
-    # Get a logger, to record metrics during training
-    logger = CSVLogger(save_dir=os.getcwd() + "/logs", name="t1")
+    max_epochs = 30
 
-    # Train the model (hint: here are some helpful Trainer arguments for rapid idea iteration)
-    trainer = pl.Trainer(
-        max_epochs=max_epochs,
-        logger=logger,
-        log_every_n_steps=1,
-    )
-    trainer.fit(model=model)
-    # print(sorted(model.model.freqs.tolist()))
+    for LAYER_NAME in (
+        "embedder.block1.maxpool_out",
+        "embedder.block1.res1.resadd_out",
+        "embedder.block1.res2.resadd_out",
+        "embedder.block2.maxpool_out",
+        "embedder.block2.res1.resadd_out",
+        "embedder.block2.res2.resadd_out",
+        "embedder.block3.maxpool_out",
+        "embedder.block3.res1.resadd_out",
+        "embedder.block3.res2.resadd_out",
+        "embedder.relu3_out",
+        "embedder.relufc_out",
+    ):
+        train_dataset = ActivationsDataset(layer_name=LAYER_NAME, file_ids=TRAIN_FILES)
+        test_dataset = ActivationsDataset(layer_name=LAYER_NAME, file_ids=VAL_FILES)
+        
+        probe = NextActionProbe(LAYER_NAME).to(device)
 
-# %%
-if MAIN:
-    metrics = pd.read_csv(f"{trainer.logger.log_dir}/metrics.csv") 
-    import sys
-    sys.path.append('/home/janbet/ARENA_2.0/chapter0_fundamentals/exercises')
+        model = LitModel(probe, batch_size, max_epochs, train_dataset, test_dataset)
+        model = model.to(device)
+        assert str(model.device).startswith(str(device)), f"model has device {model.device}"
+        
+        # Get a logger, to record metrics during training
+        logger = CSVLogger(save_dir=os.getcwd() + "/logs", name="t1")
 
-    from plotly_utils import plot_train_loss_and_test_accuracy_from_metrics   
-    plot_train_loss_and_test_accuracy_from_metrics(metrics, "TTTT")
+        # Train the model (hint: here are some helpful Trainer arguments for rapid idea iteration)
+        trainer = pl.Trainer(
+            max_epochs=max_epochs,
+            logger=logger,
+            log_every_n_steps=1,
+        )
+        trainer.fit(model=model)
+        # print(sorted(model.model.freqs.tolist()))
+
+        metrics = pd.read_csv(f"{trainer.logger.log_dir}/metrics.csv") 
+        plot_train_loss_and_test_accuracy_from_metrics(metrics, LAYER_NAME)
 # %%

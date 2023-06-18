@@ -1,0 +1,34 @@
+# %%
+import json
+import numpy as np
+import torch as t
+import pickle
+from collections import defaultdict
+
+from procgen_tools import maze, imports
+
+device = t.device("cpu")
+# %%
+for mazes_ix in range(1, 100):
+    in_fname = f'/home/janbet/arena/data/mazes_{mazes_ix}.json'
+    with open(in_fname, 'r') as f:
+        grids = json.load(f)
+
+    data = defaultdict(list)
+    for ix, (seed, grid) in enumerate(grids):
+        venv = maze.venv_from_grid(np.array(grid))
+        policy, hook = imports.load_model()
+
+        batched_obs = t.tensor(venv.reset(), dtype=t.float32, device=device).numpy()
+        with t.no_grad():
+            hook.run_with_input(batched_obs)
+
+        for layer_name, val in hook.values_by_label.items():
+            if any(x in layer_name for x in ("resadd_out", "maxpool_out", "relu3_out", "relufc_out")):
+                data[layer_name].append((seed, layer_name, val))
+    
+    for key, val in data.items():
+        out_fname = f'/home/janbet/arena/activations/mazes_{mazes_ix}_{key}.pickle'
+        with open(out_fname, 'wb') as f:
+            pickle.dump(val, f, protocol=pickle.HIGHEST_PROTOCOL)
+# %%

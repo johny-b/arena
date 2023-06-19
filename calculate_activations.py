@@ -10,7 +10,26 @@ from procgen_tools import maze, imports, models
 
 device = t.device("cpu")
 # %%
-for mazes_ix in range(1, 101):
+
+def next_step_to_cheese(grid):
+    grid = np.array(grid)
+    graph = maze.maze_grid_to_graph(grid)
+    venv = maze.venv_from_grid(grid)
+    mr, mc = maze.state_from_venv(venv).mouse_pos
+    padding = maze.get_padding(grid)
+    mr_inner, mc_inner = mr - padding, mc - padding                 
+    path_to_cheese = maze.get_path_to_cheese(grid, graph, (mr_inner, mc_inner))
+    next_step_x, next_step_y = path_to_cheese[1]
+
+    next_step_x, next_step_y = next_step_x + padding, next_step_y + padding
+    
+    diff = (next_step_x - mr, next_step_y - mc)
+    action = next(key for key, val in models.MAZE_ACTION_DELTAS.items() if val == diff)
+    
+    return action
+    
+# %%
+for mazes_ix in range(1, 11):
     in_fname = f'/home/janbet/arena/data/mazes_{mazes_ix}.json'
     with open(in_fname, 'r') as f:
         grids = json.load(f)
@@ -31,21 +50,23 @@ for mazes_ix in range(1, 101):
         
         #   Where is the cheese?
         cheese = next(zip(*(np.where(np.array(grid) == 25))))
+        
+        #   Are we going to the cheese?
+        action_to_cheese = next_step_to_cheese(grid)
 
         for layer_name, val in hook.values_by_label.items():
-            if any(x in layer_name for x in ("resadd_out", "maxpool_out", "relu3_out", "relufc_out")):
-                data[layer_name].append((seed, layer_name, action, cheese, val))
-        
+            data = (seed, layer_name, action, action_to_cheese, cheese, val)
+            if layer_name == '_out':
+                continue
+            out_fname = f'/home/janbet/arena/activations_1/mazes_{seed}_{layer_name}.pickle'
+            with open(out_fname, 'wb') as f:
+                pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+            
         #   Some of this stuff reduces memory leak (although doesn't fix it fully)
         del policy
         del hook
         del venv
         gc.collect()
     
-    for key, val in data.items():
-        out_fname = f'/home/janbet/arena/activations/mazes_{mazes_ix}_{key}.pickle'
-        with open(out_fname, 'wb') as f:
-            pickle.dump(val, f, protocol=pickle.HIGHEST_PROTOCOL)
-            
     
 # %%

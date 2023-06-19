@@ -80,3 +80,52 @@ A: IDK. Current guess: 20h or so. Article says `Each training run required appro
     # NOTE: this is just an example from the repo, hopefully the one we're interested in (I don't know what is variant 1/2)
     python train.py --exp_name maze1 --env_name maze_aisc --num_levels 100000 --distribution_mode hard --param_name hard-500 --num_timesteps 200000000 --num_checkpoints 5 --seed 1080
     ```
+
+## NOTES
+
+### Layer names
+```
+embedder.block1.conv_in0
+embedder.block1.conv_out
+embedder.block1.maxpool_out
+embedder.block1.res1.relu1_out
+embedder.block1.res1.conv1_out
+embedder.block1.res1.relu2_out
+embedder.block1.res1.conv2_out
+embedder.block1.res1.resadd_out
+embedder.block1.res2.relu1_out
+embedder.block1.res2.conv1_out
+embedder.block1.res2.relu2_out
+embedder.block1.res2.conv2_out
+embedder.block1.res2.resadd_out
+embedder.block2.conv_out
+embedder.block2.maxpool_out
+embedder.block2.res1.relu1_out
+embedder.block2.res1.conv1_out
+embedder.block2.res1.relu2_out
+embedder.block2.res1.conv2_out
+embedder.block2.res1.resadd_out
+embedder.block2.res2.relu1_out
+embedder.block2.res2.conv1_out
+embedder.block2.res2.relu2_out
+embedder.block2.res2.conv2_out
+embedder.block2.res2.resadd_out
+embedder.block3.conv_out
+embedder.block3.maxpool_out
+embedder.block3.res1.relu1_out
+embedder.block3.res1.conv1_out
+embedder.block3.res1.relu2_out
+embedder.block3.res1.conv2_out
+embedder.block3.res1.resadd_out
+embedder.block3.res2.relu1_out
+embedder.block3.res2.conv1_out
+embedder.block3.res2.relu2_out
+embedder.block3.res2.conv2_out
+embedder.block3.res2.resadd_out
+embedder.relu3_out
+embedder.flatten_out
+embedder.fc_out
+embedder.relufc_out
+fc_policy_out
+fc_value_out
+```

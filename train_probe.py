@@ -3,12 +3,14 @@
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
+import glob
 import pickle
-from typing import List
-import json
+from typing import Callable, List
+
 import pandas as pd
 
-import numpy as np
+from functools import lru_cache
+
 import torch as t
 from torch.utils.data import Dataset
 from torch import nn
@@ -26,71 +28,34 @@ device = t.device("cpu")
 MAIN = __name__ == '__main__'
 # %%
 class ActivationsDataset(Dataset):
-    def __init__(self, layer_name: str, file_ids: List[int]):
+    def __init__(self, layer_name: str, selected_seed: Callable[[int], bool]):
         self.layer_name = layer_name
-        self.file_ids = file_ids
-        self.act_files = self._get_act_files()
-        self.maze_files = self._get_maze_files()
+        self.files = self._get_files(selected_seed)
         
         self._action_map = ["LEFT", "UP", "RIGHT", "DOWN", "NOOP"]
         
-        self._current_act_data = None
-        self._current_maze_data = None
-        self._current_file_ix = None
+    def _get_files(self, selected_seed: Callable[[int], bool]) -> List[int]:
+        dir_ = '/home/janbet/arena/activations_1/'
+        all_files = glob.glob(dir_ + f'*{self.layer_name}.pickle')
+        selected_files = []
+        for fname in all_files:
+            seed = int(fname.split('_')[2])
+            if selected_seed(seed):
+                selected_files.append(fname)
+        return sorted(selected_files)
         
     def __len__(self):
-        return len(self.file_ids) * 1000
+        return len(self.files)
     
+    @lru_cache
     def __getitem__(self, idx):
-        file_ix = idx // 1000
-        sample_ix = idx % 1000
+        with open(self.files[idx], 'rb') as f:
+            data = pickle.load(f)
         
-        if self._current_file_ix is None or self._current_file_ix != file_ix:
-            self._open_files(file_ix)
-        
-        act_data = self._current_act_data[sample_ix]
-        
-        seed, layer, action, cheese, act = act_data
-        assert layer == self.layer_name
+        seed, layer_name, action, action_to_cheese, cheese, act = data    
         action_ix = self._action_map.index(action)
         
-        #   TODO what about cheese?
         return act, action_ix
-    
-    def _get_next_mouse_dir(self, grid):
-        return np.random.randint(4)
-    
-    def _get_cheese_coord(self, grid):
-        vals = np.where(np.array(grid) == 25)
-        return vals[0][0], vals[1][0]
-        
-    def _open_files(self, file_ix):
-        with open(self.act_files[file_ix], 'rb') as f:
-            self._current_act_data = pickle.load(f)
-        
-        with open(self.maze_files[file_ix], 'rb') as f:
-            self._current_maze_data = json.load(f)
-        
-        self._current_file_ix = file_ix
-            
-    def _get_act_files(self):
-        fnames = []
-        for id_ in self.file_ids:
-            fname = f'/home/janbet/arena/activations/mazes_{id_}_{self.layer_name}.pickle'
-            if not os.path.isfile(fname):
-                raise ValueError(f"File {fname} doesn't exist")
-            fnames.append(fname)
-        return fnames
-        
-    def _get_maze_files(self):
-        fnames = []
-        for id_ in self.file_ids:
-            fname = f'/home/janbet/arena/data/mazes_{id_}.json'
-            if not os.path.isfile(fname):
-                raise ValueError(f"File {fname} doesn't exist")
-            fnames.append(fname)
-        return fnames
-    
     
 
 # %%
@@ -107,7 +72,7 @@ class NextActionProbe(nn.Module):
         return self.linear(x.flatten(start_dim=1))
         
     def _calc_in_size(self):
-        dataset = ActivationsDataset(self.layer_name, [1])
+        dataset = ActivationsDataset(self.layer_name, lambda seed: True)
         sample_input = dataset[0][0]
         return sample_input.flatten().shape[0]
 
@@ -148,34 +113,33 @@ class LitModel(pl.LightningModule):
         return t.optim.Adam(self.parameters())
     
     def train_dataloader(self):
-        return t.utils.data.DataLoader(self.trainset, batch_size=self.batch_size, shuffle=False)
+        return t.utils.data.DataLoader(self.trainset, batch_size=self.batch_size, shuffle=True, num_workers=4, persistent_workers=True)
 
     def val_dataloader(self):
-        return t.utils.data.DataLoader(self.valset, batch_size=self.batch_size, shuffle=False)
+        return t.utils.data.DataLoader(self.valset, batch_size=self.batch_size, shuffle=False, num_workers=2, persistent_workers=True)
 
 # %%
 if MAIN:# %%
-    TRAIN_FILES = [1,2,3,4,5,6]
-    VAL_FILES = [7]
-      
+
     batch_size = 32
     max_epochs = 30
 
     for LAYER_NAME in (
-        "embedder.block1.maxpool_out",
-        "embedder.block1.res1.resadd_out",
-        "embedder.block1.res2.resadd_out",
-        "embedder.block2.maxpool_out",
+        # "embedder.block1.maxpool_out",
+        # "embedder.block1.res1.resadd_out",
+        # "embedder.block1.res2.resadd_out",
+        # "embedder.block2.maxpool_out",
         "embedder.block2.res1.resadd_out",
         "embedder.block2.res2.resadd_out",
         "embedder.block3.maxpool_out",
-        "embedder.block3.res1.resadd_out",
-        "embedder.block3.res2.resadd_out",
-        "embedder.relu3_out",
-        "embedder.relufc_out",
+        # "embedder.block3.res1.resadd_out",
+        # "embedder.block3.res2.resadd_out",
+        # "embedder.relu3_out",
+        # "embedder.relufc_out",
     ):
-        train_dataset = ActivationsDataset(layer_name=LAYER_NAME, file_ids=TRAIN_FILES)
-        test_dataset = ActivationsDataset(layer_name=LAYER_NAME, file_ids=VAL_FILES)
+        train_dataset = ActivationsDataset(layer_name=LAYER_NAME, selected_seed=lambda seed: seed % 100 < 80)
+        test_dataset = ActivationsDataset(layer_name=LAYER_NAME, selected_seed=lambda seed: seed % 100 >= 80)
+        print(len(train_dataset))
         
         probe = NextActionProbe(LAYER_NAME).to(device)
 

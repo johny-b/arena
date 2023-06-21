@@ -2,7 +2,7 @@
 import json
 import numpy as np
 import torch as t
-import pickle
+
 from collections import defaultdict
 import gc
 
@@ -55,12 +55,14 @@ for mazes_ix in range(1, 11):
         action_to_cheese = next_step_to_cheese(grid)
 
         for layer_name, val in hook.values_by_label.items():
-            data = (seed, layer_name, action, action_to_cheese, cheese, val)
             if layer_name == '_out':
                 continue
-            out_fname = f'/home/janbet/arena/activations_1/mazes_{seed}_{layer_name}.pickle'
-            with open(out_fname, 'wb') as f:
-                pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+            data = (seed, layer_name, action, action_to_cheese, ' '.join([str(x) for x in cheese]), val.tolist())
+            data = ' '.join([str(x) for x in data])
+
+            out_fname = f'/home/janbet/arena/activations_2/mazes_{seed}_{layer_name}.txt'
+            with open(out_fname, 'w') as f:
+                f.write(data)
             
         #   Some of this stuff reduces memory leak (although doesn't fix it fully)
         del policy

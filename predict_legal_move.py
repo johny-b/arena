@@ -1,7 +1,5 @@
 # %%
 import os
-os.chdir('/home/janbet/arena/t1')
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import numpy as np
 import torch as t
@@ -11,13 +9,13 @@ import pandas as pd
 
 from procgen_tools.imports import load_model
 from procgen_tools import maze, visualization
-device = t.device("cpu")
+device = t.device("cuda")
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import CSVLogger
 
 import sys
-sys.path.append('/home/janbet/ARENA_2.0/chapter0_fundamentals/exercises')
+sys.path.append('/root/ARENA_2.0/chapter0_fundamentals/exercises')
 
 from plotly_utils import plot_train_loss_and_test_accuracy_from_metrics   
 
@@ -89,8 +87,8 @@ class LogitDataset(Dataset):
         assert any(labels), "This should not be possible"
         return [mouse_pos, labels]
 # %%
-train_dataset = LogitDataset(200, 9, ratio=0.1)
-val_dataset = LogitDataset(20, 9, ratio=0.1)
+train_dataset = LogitDataset(10000, 9, ratio=0.05)
+val_dataset = LogitDataset(2000, 9, ratio=0.05)
 
 # %%
 class LegalActionProbe(nn.Module):
@@ -100,11 +98,13 @@ class LegalActionProbe(nn.Module):
         
     def forward(self, x):
         val = self.linear(x)
-        val_min = val.min(-1).values
-        val = val - val_min.unsqueeze(1)
-        val_max = val.max(-1).values
-        val = val / val_max.unsqueeze(1)
+        val = nn.functional.sigmoid(val)
         return val
+        # val_min = val.min(-1).values
+        # val = val - val_min.unsqueeze(1)
+        # val_max = val.max(-1).values
+        # val = val / val_max.unsqueeze(1)
+        # return val
 
 
 # %%
@@ -122,7 +122,6 @@ class LitModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx: int) -> t.Tensor:
         preds, labels = self._shared_train_val_step(batch)
-        loss = (preds - labels).square().sum()
         loss = t.nn.functional.cross_entropy(preds, labels)
         self.log("train_loss", loss)
         return loss
@@ -152,10 +151,10 @@ class LitModel(pl.LightningModule):
         return t.utils.data.DataLoader(self.valset, batch_size=self.batch_size, shuffle=False)
 
 # %%
-result = []
+
 if MAIN:# %%
     batch_size = 128
-    max_epochs = 100
+    max_epochs = 20000
     print(len(train_dataset))
     
     probe = LegalActionProbe().to(device)
@@ -180,8 +179,10 @@ if MAIN:# %%
 
 
 # %%
-# plot_train_loss_and_test_accuracy_from_metrics(metrics, "ttt")
+plot_train_loss_and_test_accuracy_from_metrics(metrics, "ttt")
 # %%
+
+t.save(model.state_dict(), 'model.pth')
 
 # print(train_dataset._data[0])
 # %%

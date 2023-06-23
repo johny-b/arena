@@ -120,13 +120,13 @@ class LogitDataset(Dataset):
         return [mouse_pos, labels]
 # %%
 if MAIN:
-    train_dataset = LogitDataset(5000, 9, ratio=0.2)
+    train_dataset = LogitDataset(4000, 9, ratio=0.1)
     val_dataset = LogitDataset(100, 9, ratio=1)
 
     # train_dataset = LogitDataset.load('train_t1.pickle')
     # val_dataset = LogitDataset.load('val_t1.pickle')
     train_dataset.save('train_large')
-    val_dataset.save('val_large')
+    # val_dataset.save('val_large')
 
 # %%
 class LegalActionProbe(nn.Module):

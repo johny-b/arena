@@ -6,6 +6,7 @@ import torch as t
 from torch.utils.data import Dataset
 from torch import nn
 import pandas as pd
+import pickle
 
 from procgen_tools.imports import load_model
 from procgen_tools import maze, visualization
@@ -31,7 +32,18 @@ class LogitDataset(Dataset):
         self.num_mazes = num_mazes
         self.maze_size = maze_size
         self.ratio = ratio
+        self.layer_name = "embedder.block1.res2.resadd_out"
         self._data = self._create_data()
+        
+    def save(self, prefix):
+        fname = prefix + '.pickle'
+        with open(fname, 'wb') as f:
+            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+    
+    @classmethod
+    def load(cls, fname):
+        with open(fname, 'rb') as f:
+            return pickle.load(f)
         
     def __len__(self):
         return len(self._data)
@@ -53,20 +65,29 @@ class LogitDataset(Dataset):
         data = []
         for ix, seed in enumerate(seeds):
             data += self._get_data_from_seed(seed)
-            print(f"PROCESS SEEDS: {ix}/{self.num_mazes}")
+            print(f"PROCESS SEEDS: {ix + 1}/{self.num_mazes}")
         return data
+    
+    @property
+    def input_shape(self) -> int:
+        return self[0][0].flatten().shape[0]
     
     def _get_data_from_seed(self, seed):
         venv = maze.create_venv(num=1, start_level=seed, num_levels=1)
         venv_all, (legal_mouse_positions, grid) = maze.venv_with_all_mouse_positions(venv)
+        
         with t.no_grad():
-            categorical, _ = policy(t.tensor(venv_all.reset(), dtype=t.float32))
+            hook.run_with_input(venv_all.reset().astype('float32'))
+        
+        activations = hook.values_by_label[self.layer_name]
+    
+        # activations = hook.values_by_label['_out'][0].logits
         
         data = []
-        for mouse_pos, logits in zip(legal_mouse_positions, categorical.logits):
+        for mouse_pos, activation in zip(legal_mouse_positions, activations):
             label = self._get_label(grid, mouse_pos)
             if np.random.random() < self.ratio:
-                data.append([logits, label])
+                data.append([activation, label])
         return data
 
     @staticmethod
@@ -75,39 +96,49 @@ class LogitDataset(Dataset):
         neighbours = [
             (x + 1, y),
             (x, y + 1),
-            (x, y - 1),
-            (x - 1, y)
+            (x - 1, y),
+            (x, y - 1)
         ]
         labels = []
         for neighbour in neighbours:
-            try:
-                labels.append(grid[neighbour] != 51)
-            except IndexError:
-                labels.append(False)
+            if any(x < 0 for x in neighbour):
+                val = False
+            elif any(x > grid.shape[0] - 1 for x in neighbour):
+                val = False
+            else:
+                val = grid[neighbour] != 51
+            labels.append(val)
+            
+        # x = maze.venv_from_grid(grid)
+        # state = maze.state_from_venv(x)
+        # state.set_mouse_pos(mouse_pos[0] + 7 + 1, mouse_pos[1] + 7 + 1)
+        
+        # print(labels)
+        # visualization.visualize_venv(maze.venv_from_grid(state.inner_grid()))
                 
         assert any(labels), "This should not be possible"
         return [mouse_pos, labels]
 # %%
 if MAIN:
-    train_dataset = LogitDataset(1000, 9, ratio=0.05)
-    val_dataset = LogitDataset(200, 9, ratio=0.05)
+    train_dataset = LogitDataset(5000, 9, ratio=0.2)
+    val_dataset = LogitDataset(100, 9, ratio=1)
+
+    # train_dataset = LogitDataset.load('train_t1.pickle')
+    # val_dataset = LogitDataset.load('val_t1.pickle')
+    train_dataset.save('train_large')
+    val_dataset.save('val_large')
 
 # %%
 class LegalActionProbe(nn.Module):
-    def __init__(self):
+    def __init__(self, in_size: int):
         super().__init__()
-        self.linear = nn.Linear(15, 4).to(t.device("cpu"))
+        self.linear = nn.Linear(in_size, 4).to(t.device("cpu"))
         
-    def forward(self, x):
+    def forward(self, x: t.Tensor):
+        x = x.flatten(start_dim=1)
         val = self.linear(x)
         val = nn.functional.sigmoid(val)
         return val
-        # val_min = val.min(-1).values
-        # val = val - val_min.unsqueeze(1)
-        # val_max = val.max(-1).values
-        # val = val / val_max.unsqueeze(1)
-        # return val
-
 
 # %%
 class LitModel(pl.LightningModule):
@@ -126,6 +157,7 @@ class LitModel(pl.LightningModule):
         preds, labels = self._shared_train_val_step(batch)
         loss = t.nn.functional.cross_entropy(preds, labels)
         self.log("train_loss", loss)
+            
         return loss
 
     def _shared_train_val_step(self, batch):
@@ -156,10 +188,10 @@ class LitModel(pl.LightningModule):
 
 if MAIN:# %%
     batch_size = 128
-    max_epochs = 1000
+    max_epochs = 500
     print(len(train_dataset))
     
-    probe = LegalActionProbe().to(device)
+    probe = LegalActionProbe(train_dataset.input_shape).to(device)
 
     model = LitModel(probe, batch_size, max_epochs, train_dataset, val_dataset)
     model = model.to(device)
@@ -181,11 +213,17 @@ if MAIN:# %%
 
 
 # %%
-# plot_train_loss_and_test_accuracy_from_metrics(metrics, "ttt")
+if MAIN:
+    plot_train_loss_and_test_accuracy_from_metrics(metrics, "ttt")
 # %%
 
 if MAIN:
-    t.save(model.state_dict(), 'model.pth')
+    size = len(train_dataset._data)
+    maze_size = train_dataset.maze_size
+    layer = train_dataset.layer_name
+    name = f'model_{layer}_{maze_size}_{size}_{max_epochs}.pth'
+    t.save(model.state_dict(), name)
+    print("SAVED", name)
 
 # print(train_dataset._data[0])
 # %%

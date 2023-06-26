@@ -10,12 +10,14 @@ from procgen_tools.models import human_readable_action, human_readable_actions, 
 from procgen_tools.rollout_utils import rollout_video_clip, get_predict
 device = t.device("cuda")
 
+MAIN = __name__ == '__main__'
+
 # %%
 
 policy, hook = load_model()
 
 # %%
-MAZE_SIZE = 25
+MAZE_SIZE = 11
 
 all_squares = [(x, y) for x in range(MAZE_SIZE) for y in range(MAZE_SIZE)]
 even_odd_squares = [square for square in all_squares if not (square[0] % 2) and (square[1] % 2)]
@@ -64,4 +66,59 @@ print(f"(Even, odd) squares have high values in channels {even_odd_high.indices.
 print(f"(Odd, even) squares have high values in channels {odd_even_high.indices.tolist()}, diff {odd_even_high.values.round().tolist()}")
 
 
+# %%
+# TEST 2. Try ablations.
+class ModelWithRelu3Ablations(nn.Module):
+    def __init__(self, orig_policy: nn.Module, channels):
+        super().__init__()
+        self.orig_policy = orig_policy
+    
+    def forward(self, x):
+        hidden = self.hidden(x)
+        
+        #   NOTE: everything below is just copied from procgen_tools.models.CategoricalPolicy
+        from torch.distributions import Categorical
+        import torch.nn.functional as F
+        
+        logits = self.orig_policy.fc_policy(hidden)
+        log_probs = F.log_softmax(logits, dim=1)                                
+        p = Categorical(logits=log_probs)                                       
+        v = self.orig_policy.fc_value(hidden).reshape(-1)                                   
+        return p, v
+        
+    def hidden(self, x):
+        embedder = self.orig_policy.embedder
+        x = embedder.block1(x)
+        x = embedder.block2(x)
+        x = embedder.block3(x)
+        x = embedder.relu3(x)
+        x = self._ablate_relu3(x)
+        x = embedder.flatten(x)
+        x = embedder.fc(x)
+        x = embedder.relufc(x)
+        return x
+    
+    def _ablate_relu3(self, x):
+        return x
+
+def assert_same_model_wo_ablations():        
+    policy_with_ablations = ModelWithRelu3Ablations(policy, [])
+    venv = maze.create_venv(num=1, start_level=get_seed(9), num_levels=1)
+    obs = t.from_numpy(venv.reset()).to(t.float32)   
+
+    with t.no_grad():
+        categorical_0, value_0 = policy(obs)
+        categorical_1, value_1 = policy_with_ablations(obs)
+    assert t.allclose(categorical_0.logits, categorical_1.logits)
+    assert t.allclose(value_0, value_1)
+
+     
+if MAIN:        
+    assert_same_model_wo_ablations()
+
+    
+        
+
+    
+    
 # %%

@@ -17,7 +17,7 @@ MAIN = __name__ == '__main__'
 policy, hook = load_model()
 
 # %%
-MAZE_SIZE = 25
+MAZE_SIZE = 11
 
 all_squares = [(x, y) for x in range(MAZE_SIZE) for y in range(MAZE_SIZE)]
 even_odd_squares = [square for square in all_squares if not (square[0] % 2) and (square[1] % 2)]
@@ -191,4 +191,44 @@ ablate_odd_even_vector_field = visualization.vector_field(venv_2, policy_ablated
 visualization.plot_vfs(orig_vector_field, ablate_even_odd_vector_field)
 # %%
 visualization.plot_vfs(orig_vector_field, ablate_odd_even_vector_field)
+# %%
+
+def get_vf(seed, policy):
+    venv = maze.create_venv(num=1, start_level=seed, num_levels=1)
+    return visualization.vector_field(venv, policy)
+
+# %%
+#   CLEAN SUMMARY OF THE ABOVE
+
+seed = get_seed(MAZE_SIZE)
+layer_name = "embedder.relu3_out"
+even_odd = get_activations_sum(seed, layer_name, even_odd_squares)
+odd_even = get_activations_sum(seed, layer_name, odd_even_squares)
+diff = (even_odd - odd_even)
+
+# %%
+TOPK_N = 30
+even_odd_high = diff.topk(TOPK_N)
+odd_even_high = diff.topk(TOPK_N, largest=False)
+print(f"(Even, odd) squares have high values in channels {even_odd_high.indices.tolist()}, diff {even_odd_high.values.round().tolist()}")
+print(f"(Odd, even) squares have high values in channels {odd_even_high.indices.tolist()}, diff {odd_even_high.values.round().tolist()}")
+
+# %%
+
+print(odd_even_high.indices)
+
+# %%
+even_odd_channels = even_odd_high.indices   # (73, 110, 112, 6, 96)
+odd_even_channels = odd_even_high.indices  # (121, 17, 20, 123, 45)
+
+policy_ablated_even_odd = ModelWithRelu3Ablations(policy, even_odd_channels)
+policy_ablated_odd_even = ModelWithRelu3Ablations(policy, odd_even_channels)
+
+vf_original = get_vf(seed, policy)
+vf_even_odd = get_vf(seed, policy_ablated_even_odd)
+vf_odd_even = get_vf(seed, policy_ablated_odd_even)
+
+visualization.plot_vfs(vf_original, vf_even_odd)
+visualization.plot_vfs(vf_original, vf_odd_even)
+
 # %%

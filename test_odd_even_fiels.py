@@ -60,8 +60,8 @@ even_odd = get_activations_sum(seed, layer_name, even_odd_squares)
 odd_even = get_activations_sum(seed, layer_name, odd_even_squares)
 diff = (even_odd - odd_even)
 
-even_odd_high = diff.topk(5)
-odd_even_high = diff.topk(5, largest=False)
+even_odd_high = diff.topk(15)
+odd_even_high = diff.topk(15, largest=False)
 print(f"(Even, odd) squares have high values in channels {even_odd_high.indices.tolist()}, diff {even_odd_high.values.round().tolist()}")
 print(f"(Odd, even) squares have high values in channels {odd_even_high.indices.tolist()}, diff {odd_even_high.values.round().tolist()}")
 
@@ -121,8 +121,8 @@ if MAIN:
 # %%
 
 #   Channels that are important for (even, odd) fields
-even_odd_channels = (73, 110, 112, 6, 96)
-odd_even_channels = (121, 17, 20, 123, 45)
+even_odd_channels = even_odd_high.indices   # (73, 110, 112, 6, 96)
+odd_even_channels = odd_even_high.indices  # (121, 17, 20, 123, 45)
 policy_ablated_even_odd = ModelWithRelu3Ablations(policy, even_odd_channels)
 policy_ablated_odd_even = ModelWithRelu3Ablations(policy, odd_even_channels)
 
@@ -173,4 +173,23 @@ print("EVEN ODD ABLATED")
 print(categorical_1.logits)
 print("ODD EVEN ABLATED")
 print(categorical_2.logits)
+# %%
+
+# seed = get_seed(MAZE_SIZE)
+
+venv_1 = maze.create_venv(num=1, start_level=seed, num_levels=1)
+venv_2 = maze.create_venv(num=1, start_level=seed, num_levels=1)
+venv_3 = maze.create_venv(num=1, start_level=seed, num_levels=1)
+
+
+orig_vector_field = visualization.vector_field(venv_1, policy)
+ablate_even_odd_vector_field = visualization.vector_field(venv_2, policy_ablated_even_odd)
+ablate_odd_even_vector_field = visualization.vector_field(venv_2, policy_ablated_odd_even)
+
+# %%
+visualization.plot_vf_diff(orig_vector_field, ablate_even_odd_vector_field)
+# %%
+visualization.plot_vf_diff(orig_vector_field, ablate_odd_even_vector_field)
+# %%
+visualization.plot_vf(orig_vector_field)
 # %%

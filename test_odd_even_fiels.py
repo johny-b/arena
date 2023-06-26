@@ -17,7 +17,7 @@ MAIN = __name__ == '__main__'
 policy, hook = load_model()
 
 # %%
-MAZE_SIZE = 11
+MAZE_SIZE = 25
 
 all_squares = [(x, y) for x in range(MAZE_SIZE) for y in range(MAZE_SIZE)]
 even_odd_squares = [square for square in all_squares if not (square[0] % 2) and (square[1] % 2)]
@@ -69,9 +69,10 @@ print(f"(Odd, even) squares have high values in channels {odd_even_high.indices.
 # %%
 # TEST 2. Try ablations.
 class ModelWithRelu3Ablations(nn.Module):
-    def __init__(self, orig_policy: nn.Module, channels):
+    def __init__(self, orig_policy: nn.Module, ablated_channels):
         super().__init__()
         self.orig_policy = orig_policy
+        self.ablated_channels = tuple(ablated_channels)
     
     def forward(self, x):
         hidden = self.hidden(x)
@@ -99,6 +100,7 @@ class ModelWithRelu3Ablations(nn.Module):
         return x
     
     def _ablate_relu3(self, x):
+        x[:, self.ablated_channels] = 0
         return x
 
 def assert_same_model_wo_ablations():        
@@ -115,10 +117,60 @@ def assert_same_model_wo_ablations():
      
 if MAIN:        
     assert_same_model_wo_ablations()
-
-    
         
+# %%
 
-    
-    
+#   Channels that are important for (even, odd) fields
+even_odd_channels = (73, 110, 112, 6, 96)
+odd_even_channels = (121, 17, 20, 123, 45)
+policy_ablated_even_odd = ModelWithRelu3Ablations(policy, even_odd_channels)
+policy_ablated_odd_even = ModelWithRelu3Ablations(policy, odd_even_channels)
+
+venv = maze.create_venv(num=1, start_level=get_seed(MAZE_SIZE), num_levels=1)
+obs = t.from_numpy(venv.reset()).to(t.float32)   
+
+with t.no_grad():
+    categorical_0, value_0 = policy(obs)
+    categorical_1, value_1 = policy_ablated_even_odd(obs)
+
+state = maze.state_from_venv(venv)
+
+#  %% 
+# TEST ON (1, 0)
+state.set_mouse_pos(1, 0)
+new_venv = maze.venv_from_grid(state.inner_grid())
+
+obs = t.from_numpy(new_venv.reset()).to(t.float32)   
+
+with t.no_grad():
+    categorical_0, value_0 = policy(obs)
+    categorical_1, value_1 = policy_ablated_even_odd(obs)
+    categorical_2, value_2 = policy_ablated_odd_even(obs)
+
+print("ORIGINAL")
+print(categorical_0.logits)
+print("EVEN ODD ABLATED")
+print(categorical_1.logits)
+print("ODD EVEN ABLATED")
+print(categorical_2.logits)
+
+# %%
+# TEST ON (0, 1)
+state.set_mouse_pos(0, 1)
+new_venv = maze.venv_from_grid(state.inner_grid())
+
+obs = t.from_numpy(new_venv.reset()).to(t.float32)   
+
+
+with t.no_grad():
+    categorical_0, value_0 = policy(obs)
+    categorical_1, value_1 = policy_ablated_even_odd(obs)
+    categorical_2, value_2 = policy_ablated_odd_even(obs)
+
+print("ORIGINAL")
+print(categorical_0.logits)
+print("EVEN ODD ABLATED")
+print(categorical_1.logits)
+print("ODD EVEN ABLATED")
+print(categorical_2.logits)
 # %%

@@ -60,8 +60,9 @@ even_odd = get_activations_sum(seed, layer_name, even_odd_squares)
 odd_even = get_activations_sum(seed, layer_name, odd_even_squares)
 diff = (even_odd - odd_even)
 
-even_odd_high = diff.topk(15)
-odd_even_high = diff.topk(15, largest=False)
+TOPK_N = 30
+even_odd_high = diff.topk(TOPK_N)
+odd_even_high = diff.topk(TOPK_N, largest=False)
 print(f"(Even, odd) squares have high values in channels {even_odd_high.indices.tolist()}, diff {even_odd_high.values.round().tolist()}")
 print(f"(Odd, even) squares have high values in channels {odd_even_high.indices.tolist()}, diff {odd_even_high.values.round().tolist()}")
 
@@ -187,9 +188,7 @@ ablate_even_odd_vector_field = visualization.vector_field(venv_2, policy_ablated
 ablate_odd_even_vector_field = visualization.vector_field(venv_2, policy_ablated_odd_even)
 
 # %%
-visualization.plot_vf_diff(orig_vector_field, ablate_even_odd_vector_field)
+visualization.plot_vfs(orig_vector_field, ablate_even_odd_vector_field)
 # %%
-visualization.plot_vf_diff(orig_vector_field, ablate_odd_even_vector_field)
-# %%
-visualization.plot_vf(orig_vector_field)
+visualization.plot_vfs(orig_vector_field, ablate_odd_even_vector_field)
 # %%
